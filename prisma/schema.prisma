@@ -1,0 +1,324 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  WORKER
+  ORGANIZER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum ShiftStatus {
+  DRAFT
+  PUBLISHED
+  CANCELLED
+  COMPLETED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+enum AssignmentStatus {
+  ASSIGNED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  CHECKED_IN
+  CHECKED_OUT
+  LATE
+  MISSED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+}
+
+model User {
+  id                   String            @id @default(uuid()) @db.Uuid
+  email                String            @unique
+  username             String            @unique
+  passwordHash         String
+  name                 String?
+  role                 Role              @default(WORKER)
+  status               AccountStatus     @default(ACTIVE)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  workerProfile        WorkerProfile?
+  organizerProfile     OrganizerProfile?
+  organizerShifts       Shift[]           @relation("OrganizerShifts")
+  sessions             Session[]
+  passwordResetTokens  PasswordResetToken[]
+  auditLogs            AuditLog[]        @relation("AuditLogUser")
+  actorAuditLogs       AuditLog[]        @relation("AuditLogActor")
+  applications         ShiftApplication[]
+  assignments          ShiftAssignment[]
+  attendance           AttendanceRecord[]
+  notifications        Notification[]
+  reports              Report[]
+  transactions         TransactionRecord[]
+  reviewsGiven         Review[]          @relation("ReviewAuthor")
+  reviewsReceived      Review[]          @relation("ReviewRecipient")
+  assignedBy           ShiftAssignment[] @relation("AssignmentAssigner")
+
+  @@index([role, status])
+  @@index([email])
+  @@index([username])
+}
+
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @db.Uuid
+  actorId     String?  @db.Uuid
+  action      String
+  details     String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  user        User?    @relation("AuditLogUser", fields: [userId], references: [id], onDelete: SetNull)
+  actor       User?    @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([actorId])
+  @@index([action])
+}
+
+model WorkerProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio          String?
+  skills       String[] @default([])
+  city         String?
+  availability String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model OrganizerProfile {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName    String?
+  description    String?
+  phone          String?
+  location       String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Shift {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizerId       String            @db.Uuid
+  organizer         User              @relation("OrganizerShifts", fields: [organizerId], references: [id], onDelete: Cascade)
+  title             String
+  category          String
+  description       String
+  venue             String
+  location          String
+  // Venue navigation.
+  //
+  // Every field is nullable on purpose: existing shifts keep working, and an
+  // organizer adds coordinates only once they have confirmed the spot. A
+  // position is never synthesised, so "no coordinates" stays a real state the
+  // interface can admit to instead of hiding behind a guessed pin.
+  venueAddress        String?
+  latitude            Float?
+  longitude           Float?
+  // "EXACT" or "APPROXIMATE": decides whether the pin is framed as precise.
+  locationPrecision   String?
+  arrivalInstructions String?
+  arrivalContact      String?
+  arrivalTime         String?
+  shiftDate         DateTime
+  startTime         String
+  endTime           String
+  compensation      Int
+  requiredStaff     Int
+  applicationDeadline DateTime
+  status            ShiftStatus       @default(DRAFT)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  applications      ShiftApplication[]
+  assignments       ShiftAssignment[]
+  attendance        AttendanceRecord[]
+  transactions      TransactionRecord[]
+  reports           Report[]
+
+  @@index([status, shiftDate])
+  @@index([organizerId])
+}
+
+model ShiftApplication {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String            @db.Uuid
+  shiftId   String            @db.Uuid
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift     Shift             @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  status    ApplicationStatus @default(PENDING)
+  coverNote String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([userId, shiftId])
+  @@index([shiftId, status])
+  @@index([userId])
+}
+
+model ShiftAssignment {
+  id            String           @id @default(uuid()) @db.Uuid
+  shiftId       String           @db.Uuid
+  userId        String           @db.Uuid
+  assignedById  String?          @db.Uuid
+  status        AssignmentStatus @default(ASSIGNED)
+  assignedAt    DateTime         @default(now())
+  completedAt   DateTime?
+  shift         Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy    User?            @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  attendance    AttendanceRecord[]
+  review        Review?          
+
+  @@unique([shiftId, userId])
+  @@index([shiftId])
+  @@index([userId])
+}
+
+model AttendanceRecord {
+  id             String          @id @default(uuid()) @db.Uuid
+  shiftId        String          @db.Uuid
+  userId         String          @db.Uuid
+  assignmentId   String?         @db.Uuid
+  status         AttendanceStatus @default(CHECKED_IN)
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  qrToken        String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  shift          Shift           @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignment     ShiftAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@unique([shiftId, userId, assignmentId])
+  @@index([shiftId])
+  @@index([userId])
+}
+
+model Review {
+  id          String          @id @default(uuid()) @db.Uuid
+  assignmentId String?        @unique @db.Uuid
+  authorId    String          @db.Uuid
+  recipientId String          @db.Uuid
+  rating      Int
+  comment     String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  author      User            @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  recipient   User            @relation("ReviewRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  assignment  ShiftAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId])
+  @@index([authorId])
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt])
+}
+
+model TransactionRecord {
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String            @db.Uuid
+  shiftId   String?           @db.Uuid
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift     Shift?            @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  type      String
+  amount    Int
+  status    TransactionStatus @default(PENDING)
+  reference String?
+  notes     String?
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([shiftId])
+}
+
+model Report {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String      @db.Uuid
+  shiftId   String?     @db.Uuid
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shift     Shift?      @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  title     String
+  details   String
+  status    ReportStatus @default(OPEN)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}

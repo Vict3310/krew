@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+/*
+ * Krew design tokens.
+ *
+ * Everything in the product reads from these values. Structure is midnight navy
+ * and ink, the brand accent is electric violet, and surfaces stay warm neutral
+ * so the accent is reserved for real actions and genuine state changes.
+ */
+:root {
+  /* Structure */
+  --krew-ink: #0b1020;
+  --krew-navy: #141b41;
+  --krew-navy-deep: #101635;
+
+  /* Brand accent */
+  --krew-violet: #5b3df5;
+  --krew-violet-hover: #4a2fd6;
+  --krew-violet-bright: #7c5cff;
+  --krew-violet-ink: #3b2ba8;
+  --krew-cobalt: #2f6bff;
+
+  /* Surfaces and text */
+  --background: #fafafc;
+  --foreground: #0b1020;
+  --surface: #ffffff;
+  --surface-soft: #f4f5f8;
+  --line: #e6e7ef;
+  --muted: #5b6178;
+  --muted-soft: #8a90a6;
+
+  /* Semantic state */
+  --success: #12a150;
+  --success-soft: #ecfaf1;
+  --warning: #8a6116;
+  --danger: #b42318;
+
+  --shadow-soft: rgba(11, 16, 32, 0.08);
+
+  /*
+   * Width of the persistent sidebar. The rail itself and the page offset it
+   * leaves behind both read this one value, so collapsing the rail cannot put
+   * them out of step with each other.
+   */
+  --rail-w: 16.5rem;
+}
+
+/* Collapsed rail: icons only, labels appear on hover. */
+html[data-rail="collapsed"] {
+  --rail-w: 5rem;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
+  --color-line: var(--line);
+  --color-muted: var(--muted);
+  --color-muted-soft: var(--muted-soft);
+  --color-ink: var(--krew-ink);
+  --color-navy: var(--krew-navy);
+  --color-krew: var(--krew-violet);
+  --color-krew-hover: var(--krew-violet-hover);
+  --color-krew-bright: var(--krew-violet-bright);
+  --color-krew-ink: var(--krew-violet-ink);
+  --color-cobalt: var(--krew-cobalt);
+  --color-success: var(--success);
+  --font-sans: var(--font-geist-sans);
+  --font-serif: var(--font-instrument-serif);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+
+/* Keyboard users first: a visible, brand-coloured focus ring everywhere. */
+:focus-visible {
+  outline: 2px solid var(--krew-violet);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: rgba(91, 61, 245, 0.18);
+}
+
+.font-display-serif {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+}
+
+/* A single restrained brand wash, used once on the landing hero. */
+.krew-wash {
+  background:
+    radial-gradient(60rem 30rem at 15% -10%, rgba(91, 61, 245, 0.1), transparent 60%),
+    radial-gradient(45rem 28rem at 90% 0%, rgba(47, 107, 255, 0.07), transparent 55%);
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(11, 16, 32, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 16, 32, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/*
+ * Map controls.
+ *
+ * Leaflet ships 30px zoom buttons, which are fiddly on a phone. These overrides
+ * enlarge the controls inside Krew's venue maps to a comfortable touch target
+ * and keep the attribution legible. They intentionally use `!important` to win
+ * against the third-party stylesheet, and are scoped to Leaflet's own classes.
+ */
+.leaflet-container .leaflet-control-zoom a {
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  font-size: 20px !important;
+}
+
+.leaflet-container .leaflet-control-attribution {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* Elevated surface used for the landing product preview. */
+.soft-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(11, 16, 32, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
