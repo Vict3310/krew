@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { buildDemoUserFromRegistration, hashPassword, isDemoAuthEnabled, issueSession } from "@/lib/auth";
 import { getDatabaseUnavailableMessage, prisma } from "@/lib/db";
+import { createDemoOtp } from "@/lib/verification";
 
 const registerSchema = z.object({
   name: z.string().min(2).max(80),
@@ -30,10 +31,14 @@ export async function POST(request: NextRequest) {
 
     if (isDemoAuthEnabled()) {
       const demoUser = { ...buildDemoUserFromRegistration({ name, email, username, password }), role };
+      const demoOtp = createDemoOtp(demoUser.email, 6);
       await issueSession(demoUser.id, request.headers.get("user-agent") ?? undefined, request.headers.get("x-forwarded-for") ?? undefined);
 
       return NextResponse.json({
         ok: true,
+        demoOtp,
+        demoMode: true,
+        message: "Demo OTP created. Use the code shown in the form to continue with the demo flow.",
         user: {
           id: demoUser.id,
           name: demoUser.name,

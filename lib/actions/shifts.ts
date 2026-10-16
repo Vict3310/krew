@@ -68,6 +68,10 @@ export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionStat
    */
   const position = toCoordinates(data.latitude ?? null, data.longitude ?? null);
 
+  if (position && !data.locationPrecision) {
+    return { ok: false, error: "Please confirm the venue pin before publishing this shift." };
+  }
+
   const payload = {
     title: data.title,
     category: data.category,

@@ -68,11 +68,18 @@ export function formatCoordinates(coordinates: Coordinates, precision = 5): stri
 export type VenueCoordinatesSource = {
   latitude?: number | null;
   longitude?: number | null;
+  locationPrecision?: "EXACT" | "APPROXIMATE" | "" | null;
 };
 
 /** True only when the record actually carries a usable, confirmed position. */
 export function hasVenueCoordinates(source: VenueCoordinatesSource): boolean {
   return toCoordinates(source.latitude ?? null, source.longitude ?? null) !== null;
+}
+
+/** A pin is only saved after the organizer explicitly confirms the location. */
+export function hasConfirmedVenueCoordinates(source: VenueCoordinatesSource): boolean {
+  if (!hasVenueCoordinates(source)) return false;
+  return source.locationPrecision === "EXACT" || source.locationPrecision === "APPROXIMATE";
 }
 
 export function venueCoordinates(source: VenueCoordinatesSource): Coordinates | null {

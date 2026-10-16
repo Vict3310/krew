@@ -17,6 +17,7 @@ import VenuePicker, {
   emptyVenueLocation,
   type VenueLocationValue,
 } from "@/components/venue/venue-picker";
+import { hasConfirmedVenueCoordinates } from "@/lib/geo/coordinates";
 import { createOrUpdateShift } from "@/lib/actions/shifts";
 
 const shiftSchema = z.object({
@@ -51,6 +52,9 @@ export default function ShiftForm({
   const { push } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pinConfirmed, setPinConfirmed] = useState<boolean>(
+    hasConfirmedVenueCoordinates(initialVenueLocation ?? emptyVenueLocation),
+  );
   const isEdit = Boolean(shiftId);
 
   // Venue location is kept outside react-hook-form: it is a set of map driven
@@ -69,7 +73,15 @@ export default function ShiftForm({
     setSaving(true);
     setError(null);
 
-    const result = await createOrUpdateShift({ ...values, ...venueLocation, id: shiftId });
+    if (venueLocation.latitude != null && venueLocation.longitude != null && !pinConfirmed) {
+      setError("Please confirm the venue pin on the map before publishing this shift.");
+      push({ title: "Confirm the venue pin", description: "A location is only saved after you confirm it on the map.", variant: "error" });
+      setSaving(false);
+      return;
+    }
+
+    const safeVenueLocation = pinConfirmed ? venueLocation : { ...venueLocation, latitude: null, longitude: null, locationPrecision: "" };
+    const result = await createOrUpdateShift({ ...values, ...safeVenueLocation, id: shiftId });
 
     if (!result.ok) {
       setError(result.error ?? "Unable to save this shift.");
@@ -182,7 +194,13 @@ export default function ShiftForm({
                 Confirmed crew see this on their assignment page: a map pin, an address and your arrival instructions.
               </p>
             </div>
-            <VenuePicker value={venueLocation} onChange={setVenueLocation} venueName={venueName} />
+            <VenuePicker
+              value={venueLocation}
+              onChange={setVenueLocation}
+              venueName={venueName}
+              pinConfirmed={pinConfirmed}
+              onPinConfirmedChange={setPinConfirmed}
+            />
           </div>
 
           <div className="flex flex-wrap gap-3 md:col-span-2">

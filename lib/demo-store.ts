@@ -6,13 +6,17 @@ export type DemoUser = {
   email: string;
   username: string;
   name: string;
+  passwordHash?: string;
+  phone?: string | null;
+  emailVerifiedAt?: Date | null;
+  phoneVerifiedAt?: Date | null;
   role: DemoRole;
   status: DemoStatus;
   bio?: string;
   city?: string;
   availability?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 };
 
 export type DemoShift = {
@@ -113,6 +117,9 @@ function getDemoUserFromPersona(persona: DemoPersona): DemoUser {
     email: persona.email,
     username: persona.username,
     name: persona.name,
+    phone: null,
+    emailVerifiedAt: null,
+    phoneVerifiedAt: null,
     role: persona.role,
     status: persona.status,
     bio: persona.bio,

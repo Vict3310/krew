@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import VenueMap from "@/components/venue/venue-map";
-import { isWithinNigeria, type Coordinates } from "@/lib/geo/coordinates";
+import { hasConfirmedVenueCoordinates, isWithinNigeria, type Coordinates } from "@/lib/geo/coordinates";
 import { buildSearchLink } from "@/lib/geo/navigation";
 
 export type VenueLocationValue = {
@@ -59,26 +59,29 @@ export default function VenuePicker({
   value,
   onChange,
   venueName,
+  pinConfirmed,
+  onPinConfirmedChange,
 }: {
   value: VenueLocationValue;
   onChange: (next: VenueLocationValue) => void;
   venueName: string;
+  pinConfirmed: boolean;
+  onPinConfirmedChange: (next: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<SearchState>({ status: "idle" });
-  const [pinConfirmed, setPinConfirmed] = useState(Boolean(value.latitude && value.locationPrecision));
   const [addressLookup, setAddressLookup] = useState<string | null>(null);
   const [lookupBusy, setLookupBusy] = useState(false);
 
   const hasPin = typeof value.latitude === "number" && typeof value.longitude === "number";
   const pinOutsideNigeria = hasPin && !isWithinNigeria({ latitude: value.latitude!, longitude: value.longitude! });
+  const isConfirmed = pinConfirmed && hasConfirmedVenueCoordinates(value);
 
   function patch(next: Partial<VenueLocationValue>) {
     onChange({ ...value, ...next });
   }
 
-  async function runSearch(event: React.FormEvent) {
-    event.preventDefault();
+  async function runSearch() {
     const trimmed = query.trim();
     if (trimmed.length < 3) {
       setSearch({ status: "error", message: "Type at least 3 characters so we can find the venue." });
@@ -118,7 +121,7 @@ export default function VenuePicker({
       venueAddress: value.venueAddress.trim() ? value.venueAddress : place.address,
       locationPrecision: "",
     });
-    setPinConfirmed(false);
+    onPinConfirmedChange(false);
     setAddressLookup(null);
     setSearch({ status: "idle" });
   }
@@ -131,9 +134,9 @@ export default function VenuePicker({
     patch({
       latitude: point.latitude,
       longitude: point.longitude,
-      locationPrecision: value.locationPrecision === "EXACT" ? "EXACT" : "APPROXIMATE",
+      locationPrecision: "",
     });
-    setPinConfirmed(false);
+    onPinConfirmedChange(false);
     setAddressLookup(null);
   }
 
@@ -167,7 +170,7 @@ export default function VenuePicker({
 
   function clearPin() {
     patch({ latitude: null, longitude: null, locationPrecision: "" });
-    setPinConfirmed(false);
+    onPinConfirmedChange(false);
     setAddressLookup(null);
   }
 
@@ -181,15 +184,21 @@ export default function VenuePicker({
         <p className="mt-1 text-xs text-[#5B6178]">
           Search with the venue name, landmark or street. Nothing is saved until you confirm the pin.
         </p>
-        <form onSubmit={runSearch} className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <Input
             id="venue-search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={venueName ? `e.g. ${venueName}, Lekki, Lagos` : "e.g. Eko Hotel, Victoria Island"}
             className="min-h-11"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                runSearch();
+              }
+            }}
           />
-          <Button type="submit" variant="secondary" className="min-h-11 sm:w-40" disabled={search.status === "searching"}>
+          <Button type="button" variant="secondary" className="min-h-11 sm:w-40" disabled={search.status === "searching"} onClick={runSearch}>
             {search.status === "searching" ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
             ) : (
@@ -197,7 +206,7 @@ export default function VenuePicker({
             )}
             Search
           </Button>
-        </form>
+        </div>
 
         {search.status === "results" ? (
           <ul className="mt-3 space-y-2">
@@ -270,7 +279,7 @@ export default function VenuePicker({
                     latitude: value.latitude,
                     longitude: value.longitude,
                     label: venueName || "Venue",
-                    approximate: value.locationPrecision === "APPROXIMATE" || !pinConfirmed,
+                    approximate: value.locationPrecision === "APPROXIMATE" || !isConfirmed,
                   }
                 : { latitude: null, longitude: null, label: venueName || "Venue" }
             }
@@ -299,7 +308,7 @@ export default function VenuePicker({
             <p className="font-mono text-xs text-[#5B6178]">
               {value.latitude!.toFixed(5)}, {value.longitude!.toFixed(5)}
             </p>
-            {pinConfirmed ? (
+            {isConfirmed ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#ECFAF1] px-2.5 py-1 text-xs font-medium text-[#141B41]">
                 <Check className="h-3 w-3" aria-hidden="true" />
                 Pin confirmed by you
@@ -326,7 +335,7 @@ export default function VenuePicker({
                   aria-pressed={value.locationPrecision === option.id}
                   onClick={() => {
                     patch({ locationPrecision: option.id });
-                    setPinConfirmed(option.id === "EXACT" ? true : value.locationPrecision === "APPROXIMATE");
+                    onPinConfirmedChange(false);
                   }}
                   className={`min-h-11 flex-1 rounded-xl border px-3 py-2 text-left text-sm transition ${
                     value.locationPrecision === option.id
@@ -341,12 +350,12 @@ export default function VenuePicker({
             </div>
           </fieldset>
 
-          {!pinConfirmed && value.locationPrecision ? (
+          {!isConfirmed && value.locationPrecision ? (
             <Button
               type="button"
               size="sm"
               className="min-h-9"
-              onClick={() => setPinConfirmed(true)}
+              onClick={() => onPinConfirmedChange(true)}
             >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               This pin is correct

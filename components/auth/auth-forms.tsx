@@ -54,6 +54,7 @@ export function RegisterForm({ initialRole = "WORKER" }: { initialRole?: SignupR
   const params = useSearchParams();
   const [role, setRole] = useState<SignupRole>(initialRole);
   const [error, setError] = useState<string | null>(null);
+  const [demoOtp, setDemoOtp] = useState<string | null>(null);
   const form = useForm({ resolver: zodResolver(registerSchema), defaultValues: { name: "", email: "", username: "", password: "" } });
 
   const onSubmit = async (values: z.infer<typeof registerSchema>) => {
@@ -70,6 +71,10 @@ export function RegisterForm({ initialRole = "WORKER" }: { initialRole?: SignupR
       return;
     }
 
+    if (data?.demoOtp) {
+      setDemoOtp(data.demoOtp);
+    }
+
     const next = safeNext(params.get("next"));
     // New accounts always finish onboarding before reaching a dashboard.
     router.push(next ?? "/onboarding");
@@ -84,6 +89,12 @@ export function RegisterForm({ initialRole = "WORKER" }: { initialRole?: SignupR
   return (
     <form className="space-y-5" onSubmit={form.handleSubmit(onSubmit)}>
       {error && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {demoOtp && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="font-semibold">Demo verification code</div>
+          <div className="mt-1 font-mono text-lg tracking-[0.25em]">{demoOtp}</div>
+        </div>
+      )}
 
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium text-[#141B41]">I want to…</legend>

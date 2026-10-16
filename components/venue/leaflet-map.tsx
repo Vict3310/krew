@@ -15,20 +15,23 @@ import "leaflet/dist/leaflet.css";
  * problem of the default icon URLs not resolving.
  */
 
-const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_URL =
+  process.env.NEXT_PUBLIC_MAP_TILE_URL ?? "https://{s}.basemaps.cartocdn.com/rastertiles/voyager_labels_under/{z}/{x}/{y}{r}.png";
 const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors';
+  process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ??
+  '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noreferrer">CARTO</a>';
 
 export type MapPoint = { latitude: number; longitude: number };
 
 export type LeafletMapProps = {
-  destination: MapPoint & { label: string; approximate?: boolean };
+  destination?: MapPoint & { label?: string; approximate?: boolean };
   origin?: MapPoint | null;
   /** GeoJSON order: [longitude, latitude]. */
   route?: [number, number][] | null;
   /** Picker mode: clicking or dragging moves the destination. */
   onDestinationChange?: (point: MapPoint) => void;
   className?: string;
+  placeholder?: boolean;
 };
 
 function pinIcon({ approximate }: { approximate: boolean }): L.DivIcon {
@@ -89,10 +92,21 @@ export default function LeafletMap({
   route,
   onDestinationChange,
   className,
+  placeholder = false,
 }: LeafletMapProps) {
   const [tilesFailed, setTilesFailed] = useState(false);
 
-  const icon = useMemo(() => pinIcon({ approximate: Boolean(destination.approximate) }), [destination.approximate]);
+  const safeDestination = destination ?? {
+    latitude: 9.082,
+    longitude: 8.6753,
+    label: "Nigeria",
+    approximate: false,
+  };
+
+  const icon = useMemo(
+    () => pinIcon({ approximate: Boolean(safeDestination.approximate) }),
+    [safeDestination.approximate],
+  );
   const draggable = Boolean(onDestinationChange);
 
   return (
@@ -108,8 +122,8 @@ export default function LeafletMap({
       ) : null}
 
       <MapContainer
-        center={[destination.latitude, destination.longitude]}
-        zoom={15}
+        center={[safeDestination.latitude, safeDestination.longitude]}
+        zoom={placeholder ? 6 : 15}
         scrollWheelZoom
         className="h-full w-full"
         style={{ height: "100%", width: "100%", borderRadius: "16px", zIndex: 0 }}
@@ -120,7 +134,7 @@ export default function LeafletMap({
           eventHandlers={{ tileerror: () => setTilesFailed(true) }}
         />
 
-        <Viewport destination={destination} origin={origin ?? null} />
+        <Viewport destination={safeDestination} origin={origin ?? null} />
 
         {onDestinationChange ? <ClickToPlace onPlace={onDestinationChange} /> : null}
 
@@ -133,30 +147,32 @@ export default function LeafletMap({
 
         {origin ? <Marker position={[origin.latitude, origin.longitude]} icon={originIcon()} /> : null}
 
-        <Marker
-          position={[destination.latitude, destination.longitude]}
-          icon={icon}
-          draggable={draggable}
-          eventHandlers={
-            draggable
-              ? {
-                  dragend(event) {
-                    const { lat, lng } = event.target.getLatLng();
-                    onDestinationChange?.({ latitude: lat, longitude: lng });
-                  },
-                }
-              : undefined
-          }
-        >
-          <Popup>
-            <span className="block text-sm font-semibold text-[#0B1020]">{destination.label}</span>
-            {destination.approximate ? (
-              <span className="mt-1 block text-xs text-[#5B6178]">
-                Approximate pin — confirm the entrance locally.
-              </span>
-            ) : null}
-          </Popup>
-        </Marker>
+        {!placeholder ? (
+          <Marker
+            position={[safeDestination.latitude, safeDestination.longitude]}
+            icon={icon}
+            draggable={draggable}
+            eventHandlers={
+              draggable
+                ? {
+                    dragend(event) {
+                      const { lat, lng } = event.target.getLatLng();
+                      onDestinationChange?.({ latitude: lat, longitude: lng });
+                    },
+                  }
+                : undefined
+            }
+          >
+            <Popup>
+              <span className="block text-sm font-semibold text-[#0B1020]">{safeDestination.label}</span>
+              {safeDestination.approximate ? (
+                <span className="mt-1 block text-xs text-[#5B6178]">
+                  Approximate pin — confirm the entrance locally.
+                </span>
+              ) : null}
+            </Popup>
+          </Marker>
+        ) : null}
       </MapContainer>
     </div>
   );

@@ -33,6 +33,24 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
+enum VerificationChannel {
+  EMAIL
+  PHONE
+}
+
+enum VerificationPurpose {
+  SIGNUP
+  ACCOUNT_VERIFICATION
+  PROFILE_UPDATE
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
 enum AssignmentStatus {
   ASSIGNED
   CONFIRMED
@@ -66,15 +84,20 @@ model User {
   username             String            @unique
   passwordHash         String
   name                 String?
+  phone                String?
   role                 Role              @default(WORKER)
   status               AccountStatus     @default(ACTIVE)
+  emailVerifiedAt      DateTime?
+  phoneVerifiedAt      DateTime?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
   workerProfile        WorkerProfile?
   organizerProfile     OrganizerProfile?
-  organizerShifts       Shift[]           @relation("OrganizerShifts")
+  organizerShifts      Shift[]           @relation("OrganizerShifts")
   sessions             Session[]
   passwordResetTokens  PasswordResetToken[]
+  otpChallenges        OtpChallenge[]
+  verificationRecords  VerificationRecord[]
   auditLogs            AuditLog[]        @relation("AuditLogUser")
   actorAuditLogs       AuditLog[]        @relation("AuditLogActor")
   applications         ShiftApplication[]
@@ -119,6 +142,41 @@ model PasswordResetToken {
   updatedAt  DateTime  @updatedAt
 
   @@index([userId])
+}
+
+model OtpChallenge {
+  id         String              @id @default(uuid()) @db.Uuid
+  userId     String              @db.Uuid
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel    VerificationChannel
+  purpose    VerificationPurpose
+  codeHash   String
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  attempts   Int                 @default(0)
+  maxAttempts Int               @default(5)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@index([userId, channel, purpose])
+  @@index([expiresAt])
+}
+
+model VerificationRecord {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @db.Uuid
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel       VerificationChannel
+  purpose       VerificationPurpose
+  status        VerificationStatus @default(PENDING)
+  issue         String?
+  reviewedAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([userId, channel, purpose])
+  @@index([userId, status])
+  @@index([channel, status])
 }
 
 model AuditLog {

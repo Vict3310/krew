@@ -44,13 +44,21 @@ export default function VenueMap({
 
   if (!coordinates) {
     return (
-      <div
-        className={`${className} grid place-items-center rounded-2xl border border-dashed border-[#E2E3EC] bg-[#F4F5F8] p-6 text-center`}
-      >
-        <div>
-          <MapPin className="mx-auto h-5 w-5 text-[#8A90A6]" aria-hidden="true" />
-          <p className="mt-2 text-sm text-[#5B6178]">{emptyMessage}</p>
-          <p className="mt-1 text-xs text-[#8A90A6]">
+      <div className={`${className} relative overflow-hidden rounded-2xl border border-[#E2E3EC] bg-[#F4F5F8]`}>
+        <LeafletMap
+          destination={{ latitude: 9.082, longitude: 8.6753, label: "Nigeria" }}
+          origin={origin ?? null}
+          route={route ?? null}
+          onDestinationChange={onDestinationChange}
+          className="h-full w-full"
+          placeholder
+        />
+        <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-xl border border-white/80 bg-white/80 px-3 py-2 text-center shadow-sm backdrop-blur-sm">
+          <div className="flex items-center justify-center gap-2 text-sm text-[#5B6178]">
+            <MapPin className="h-4 w-4 text-[#8A90A6]" aria-hidden="true" />
+            <span>{emptyMessage}</span>
+          </div>
+          <p className="mt-1 text-[11px] text-[#8A90A6]">
             Krew never guesses a position, so no pin is shown until someone confirms the location.
           </p>
         </div>

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { type User, AccountStatus, Role } from "@prisma/client";
 import * as argon2 from "argon2";
 
-import { demoPersonas, getDemoStore, getDemoUserById } from "@/lib/demo-store";
+import { demoPersonas, getDemoStore, getDemoUserById, type DemoUser } from "@/lib/demo-store";
 import { prisma } from "@/lib/db";
 
 export const SESSION_COOKIE_NAME = "eventcrew_session";
@@ -31,6 +31,9 @@ export function buildDemoUserFromLogin(identifier: string, password: string) {
       email: knownDemoUser.email,
       username: knownDemoUser.username,
       name: knownDemoUser.name,
+      phone: null,
+      emailVerifiedAt: null,
+      phoneVerifiedAt: null,
       role: knownDemoUser.role,
       status: knownDemoUser.status,
       passwordHash: hashToken(normalizedPassword),
@@ -49,6 +52,9 @@ export function buildDemoUserFromLogin(identifier: string, password: string) {
     email,
     username,
     name: username.charAt(0).toUpperCase() + username.slice(1),
+    phone: null,
+    emailVerifiedAt: null,
+    phoneVerifiedAt: null,
     role: Role.WORKER,
     status: AccountStatus.ACTIVE,
     passwordHash: hashToken(password),
@@ -57,8 +63,25 @@ export function buildDemoUserFromLogin(identifier: string, password: string) {
   } satisfies SafeUser;
 }
 
+function normalizeDemoUserForAuth(user: DemoUser): SafeUser {
+  return {
+    id: user.id,
+    email: user.email,
+    username: user.username,
+    name: user.name ?? null,
+    passwordHash: user.passwordHash ?? hashToken(`${user.email}:demo-password`),
+    phone: user.phone ?? null,
+    emailVerifiedAt: user.emailVerifiedAt ?? null,
+    phoneVerifiedAt: user.phoneVerifiedAt ?? null,
+    role: user.role as Role,
+    status: user.status as AccountStatus,
+    createdAt: new Date(user.createdAt),
+    updatedAt: new Date(user.updatedAt),
+  };
+}
+
 export function getDemoUser() {
-  return getDemoUserById("ada-worker") ?? getDemoStore().users[0] ?? buildDemoUserFromLogin("demo@example.com", "Password123!");
+  return normalizeDemoUserForAuth(getDemoUserById("ada-worker") ?? getDemoStore().users[0] ?? buildDemoUserFromLogin("demo@example.com", "Password123!"));
 }
 
 export function buildDemoUserFromRegistration(values: {
@@ -75,6 +98,9 @@ export function buildDemoUserFromRegistration(values: {
     email,
     username,
     name: values.name.trim() || username,
+    phone: null,
+    emailVerifiedAt: null,
+    phoneVerifiedAt: null,
     role: Role.WORKER,
     status: AccountStatus.ACTIVE,
     passwordHash: hashToken(values.password),
@@ -102,12 +128,15 @@ export async function verifyPassword(password: string, passwordHash: string) {
 export async function issueSession(userId: string, userAgent?: string, ipAddress?: string) {
   if (isDemoAuthEnabled()) {
     const seededDemoUser = getDemoUserById(userId) ?? buildDemoUserFromLogin(userId, "demo-password");
-    const demoUser = {
+    const demoUser = normalizeDemoUserForAuth({
       ...seededDemoUser,
-      passwordHash: hashToken(seededDemoUser.email + ":demo-password"),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    } satisfies SafeUser;
+      passwordHash: seededDemoUser.passwordHash ?? hashToken(seededDemoUser.email + ":demo-password"),
+      phone: seededDemoUser.phone ?? null,
+      emailVerifiedAt: seededDemoUser.emailVerifiedAt ?? null,
+      phoneVerifiedAt: seededDemoUser.phoneVerifiedAt ?? null,
+      createdAt: seededDemoUser.createdAt ?? new Date(),
+      updatedAt: seededDemoUser.updatedAt ?? new Date(),
+    });
     const rawToken = `demo:${demoUser.id}`;
 
     demoSessions.set(rawToken, {
@@ -156,7 +185,8 @@ export async function getSessionFromRequest() {
     const cookieStore = await cookies();
     const rawToken = cookieStore.get(SESSION_COOKIE_NAME)?.value;
     const selectedUserId = rawToken?.startsWith("demo:") ? rawToken.replace(/^demo:/, "") : null;
-    const demoUser = selectedUserId ? getDemoUserById(selectedUserId) ?? getDemoUser() : getDemoUser();
+    const seededDemoUser = selectedUserId ? getDemoUserById(selectedUserId) : undefined;
+    const demoUser = seededDemoUser ? normalizeDemoUserForAuth(seededDemoUser) : getDemoUser();
 
     return {
       id: rawToken ?? "demo-session",

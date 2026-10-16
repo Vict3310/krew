@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatCoordinates,
+  hasConfirmedVenueCoordinates,
   hasVenueCoordinates,
   isWithinNigeria,
   parseCoordinatePair,
@@ -45,6 +46,13 @@ describe("coordinate validation", () => {
     expect(hasVenueCoordinates({})).toBe(false);
     expect(hasVenueCoordinates({ latitude: 6.4, longitude: 3.4 })).toBe(true);
     expect(venueCoordinates({ latitude: 6.4, longitude: null })).toBeNull();
+  });
+
+  it("requires an explicit venue confirmation before treating a pin as saved", () => {
+    expect(hasConfirmedVenueCoordinates({ latitude: 6.4, longitude: 3.4, locationPrecision: "" })).toBe(false);
+    expect(hasConfirmedVenueCoordinates({ latitude: 6.4, longitude: 3.4, locationPrecision: "APPROXIMATE" })).toBe(true);
+    expect(hasConfirmedVenueCoordinates({ latitude: 6.4, longitude: 3.4, locationPrecision: "EXACT" })).toBe(true);
+    expect(hasConfirmedVenueCoordinates({ latitude: 6.4, longitude: null, locationPrecision: "APPROXIMATE" })).toBe(false);
   });
 
   it("recognises Nigerian coordinates without rejecting others", () => {

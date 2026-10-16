@@ -61,6 +61,8 @@ export default function VenueNavigator({ assignmentId, routeEnabled, venue }: Ve
   const links = buildNavigationLinks(destination, { label: venue.name });
   const navigateLink = links.find((link) => link.id === "device") ?? null;
   const mapLinks = links.filter((link) => link.id !== "device");
+  const fallbackNavigationHref = mapLinks[0]?.href ?? navigateLink?.href ?? "#";
+  const isMobileMapsDevice = typeof navigator !== "undefined" && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
 
   const straightLineMeters = destination && origin ? haversineMeters(origin, destination) : null;
 
@@ -153,6 +155,19 @@ export default function VenueNavigator({ assignmentId, routeEnabled, venue }: Ve
   function clearLocation() {
     setGeo({ status: "idle" });
     setRoute({ status: "idle" });
+  }
+
+  function handlePrimaryNavigation(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (!navigateLink) return;
+
+    if (isMobileMapsDevice || navigateLink.href.startsWith("geo:") === false) {
+      return;
+    }
+
+    event.preventDefault();
+    if (typeof window !== "undefined") {
+      window.open(fallbackNavigationHref, "_blank", "noopener,noreferrer");
+    }
   }
 
   return (
@@ -281,6 +296,9 @@ export default function VenueNavigator({ assignmentId, routeEnabled, venue }: Ve
             {navigateLink ? (
               <a
                 href={navigateLink.href}
+                target={isMobileMapsDevice ? undefined : "_blank"}
+                rel={isMobileMapsDevice ? undefined : "noreferrer"}
+                onClick={handlePrimaryNavigation}
                 className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#5B3DF5] px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(91,61,245,0.28)] transition hover:bg-[#4A2FD6]"
               >
                 <Navigation className="h-4 w-4 shrink-0" aria-hidden="true" />
