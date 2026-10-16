@@ -192,6 +192,42 @@ export async function getOrganizerDashboard(organizerId: string) {
   return { user, shifts, pendingApplications, confirmedAssignments, openPositions };
 }
 
+/**
+ * Billing view for one organizer: every shift's funding state plus the deposits
+ * they have actually made.
+ *
+ * Deposits are read back from the organizer's own transaction records, so the
+ * page reports money that really moved rather than a derived guess.
+ */
+export async function getOrganizerBilling(organizerId: string) {
+  const [shifts, deposits] = await Promise.all([
+    prisma.shift.findMany({
+      where: { organizerId },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        fundingStatus: true,
+        escrowAmount: true,
+        requiredStaff: true,
+        compensation: true,
+        shiftDate: true,
+        fundedAt: true,
+        releasedAt: true,
+      },
+      orderBy: [{ shiftDate: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.transactionRecord.findMany({
+      where: { userId: organizerId, type: "ESCROW_DEPOSIT" },
+      include: { shift: { select: { id: true, title: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+  ]);
+
+  return { shifts, deposits };
+}
+
 /** Applications for one shift, with the worker profile used to judge fit. */
 export async function getShiftApplicationsForOrganizer(shiftId: string, organizerId: string) {
   return prisma.shiftApplication.findMany({

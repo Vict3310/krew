@@ -2,15 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { CheckCircle2, Info, Loader2, Lock, ShieldCheck, Unlock } from "lucide-react";
+import { CheckCircle2, Loader2, ShieldCheck, Unlock } from "lucide-react";
 
+import EscrowDepositForm from "@/components/organizer/escrow-deposit-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/toast";
-import { fundShiftEscrow, markShiftCompleted, releaseShiftEscrow } from "@/lib/actions/escrow";
+import { markShiftCompleted, releaseShiftEscrow } from "@/lib/actions/escrow";
 import { escrowStatusLabel, escrowStatusTone } from "@/lib/escrow";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
@@ -50,37 +49,10 @@ export default function EscrowPanel({
   const { push } = useToast();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [card, setCard] = useState({ cardName: "", cardNumber: "", expiry: "", cvc: "" });
 
   const funded = fundingStatus === "FUNDED";
   const released = fundingStatus === "RELEASED";
   const crewPayout = compensation * crewCount;
-
-  function update(field: keyof typeof card, value: string) {
-    setCard((current) => ({ ...current, [field]: value }));
-  }
-
-  function submitFunding(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-
-    startTransition(async () => {
-      const result = await fundShiftEscrow({ shiftId, ...card });
-      if (!result.ok) {
-        setError(result.error ?? "We could not take that deposit.");
-        push({ title: "Deposit failed", description: result.error, variant: "error" });
-        return;
-      }
-
-      setCard({ cardName: "", cardNumber: "", expiry: "", cvc: "" });
-      push({
-        title: "Funds held in escrow",
-        description: `${formatCurrency(result.amount ?? requiredAmount)} is reserved for “${shiftTitle}” (ref ${result.reference}).`,
-        variant: "success",
-      });
-      router.refresh();
-    });
-  }
 
   function release() {
     setError(null);
@@ -155,38 +127,7 @@ export default function EscrowPanel({
         {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
 
         {fundingStatus === "UNFUNDED" ? (
-          <form className="space-y-4 rounded-2xl border border-[#E6E7EF] bg-white p-4" onSubmit={submitFunding}>
-            <div className="flex items-start gap-2 rounded-xl bg-[#F5F4FF] p-3 text-xs text-[#5B6178]">
-              <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#5B3DF5]" aria-hidden="true" />
-              <span>
-                Simulated payment — no real card is charged. Use a test card such as
-                <span className="font-medium text-[#0B1020]"> 4242 4242 4242 4242</span>, any future expiry and any 3-digit code.
-              </span>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="cardName">Name on card</Label>
-                <Input id="cardName" value={card.cardName} onChange={(event) => update("cardName", event.target.value)} placeholder="Chidi Organizer" autoComplete="off" />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="cardNumber">Card number</Label>
-                <Input id="cardNumber" value={card.cardNumber} onChange={(event) => update("cardNumber", event.target.value)} placeholder="4242 4242 4242 4242" inputMode="numeric" autoComplete="off" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="expiry">Expiry (MM/YY)</Label>
-                <Input id="expiry" value={card.expiry} onChange={(event) => update("expiry", event.target.value)} placeholder="12/30" autoComplete="off" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cvc">Security code</Label>
-                <Input id="cvc" value={card.cvc} onChange={(event) => update("cvc", event.target.value)} placeholder="123" inputMode="numeric" autoComplete="off" />
-              </div>
-            </div>
-
-            <Button type="submit" disabled={pending || requiredAmount <= 0}>
-              {pending ? <><Loader2 className="h-4 w-4 animate-spin" /> Processing…</> : <><Lock className="h-4 w-4" /> Deposit {formatCurrency(requiredAmount)} into escrow</>}
-            </Button>
-          </form>
+          <EscrowDepositForm shiftId={shiftId} shiftTitle={shiftTitle} amount={requiredAmount} />
         ) : null}
 
         {funded ? (

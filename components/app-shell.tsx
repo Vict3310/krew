@@ -59,6 +59,7 @@ function navItemsForRole(role?: string | null): NavItem[] {
         { href: "/organizer", label: "My events", icon: ShieldCheck },
         { href: "/organizer/shifts", label: "Staffing requests", icon: BriefcaseBusiness },
         { href: "/organizer/shifts/new", label: "Post a shift", icon: PlusCircle },
+        { href: "/organizer/billing", label: "Billing", icon: Wallet },
         marketplace,
         profile,
       ];
@@ -134,6 +135,13 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
    */
   const isAuthRoute = pathname.startsWith("/auth");
   const navItems = navItemsForRole(user?.role);
+  /*
+   * The most specific matching link owns the highlight, so `/organizer` does not
+   * stay lit while a sub-page such as `/organizer/billing` is open.
+   */
+  const activeHref = [...navItems]
+    .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   // The rail's width lives in one CSS variable on <html>, so the rail and the
   // page offset it leaves behind follow it together.
@@ -213,7 +221,7 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
 
             <div className={collapsed ? "flex flex-col items-center gap-1" : "space-y-1"}>
               {navItems.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href || pathname.startsWith(`${href}/`);
+                const active = href === activeHref;
 
                 return (
                   <Link
