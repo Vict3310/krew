@@ -116,6 +116,7 @@ model User {
   reviewsGiven         Review[]          @relation("ReviewAuthor")
   reviewsReceived      Review[]          @relation("ReviewRecipient")
   assignedBy           ShiftAssignment[] @relation("AssignmentAssigner")
+  avatar               UserAvatar?
 
   @@index([role, status])
   @@index([email])
@@ -201,6 +202,22 @@ model AuditLog {
   @@index([userId])
   @@index([actorId])
   @@index([action])
+}
+
+/// Profile pictures are kept in the database rather than object storage.
+///
+/// Only small, resized images are accepted (the browser shrinks them before
+/// upload), and the bytes are served back through `/api/avatars/[userId]` so a
+/// single avatar is never loaded as part of a query that does not ask for it.
+model UserAvatar {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @unique @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mimeType  String
+  byteSize  Int
+  data      Bytes
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model WorkerProfile {

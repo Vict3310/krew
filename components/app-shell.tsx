@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useSyncExternalStore } from "react";
 
+import Avatar from "@/components/avatar";
 import { KrewLogo } from "@/components/brand/logo";
 import SessionSync from "@/components/session-sync";
 import SiteHeader from "@/components/site-header";
@@ -166,8 +167,6 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
     );
   }
 
-  const initial = (user?.name ?? user?.username ?? "E").trim().charAt(0).toUpperCase() || "E";
-
   return (
     <>
       <SessionSync />
@@ -258,11 +257,8 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
           >
             {collapsed ? (
               <>
-                <span
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#5B3DF5] text-sm font-medium text-white"
-                  title={user.name ?? user.username}
-                >
-                  {initial}
+                <span title={user.name ?? user.username}>
+                  <Avatar userId={user.id} name={user.name ?? user.username} size={36} />
                 </span>
                 <form action="/api/auth/logout" method="post" className="group relative">
                   <button
@@ -278,12 +274,7 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
             ) : (
               <div className="rounded-2xl border border-black/10 bg-white/70 p-3">
                 <div className="flex items-center gap-3">
-                  <span
-                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#5B3DF5] text-sm font-medium text-white"
-                    aria-hidden="true"
-                  >
-                    {initial}
-                  </span>
+                  <Avatar userId={user.id} name={user.name ?? user.username} size={36} />
                   <span className="min-w-0">
                     <span className="block truncate text-sm text-[#0B1020]">{user.name ?? user.username}</span>
                     <span className="block truncate text-xs text-black/45">{user.role ?? user.email}</span>

@@ -47,6 +47,8 @@ export default async function OnboardingPage() {
         <CardContent>
           <OnboardingForm
             role={user.role}
+            userId={user.id}
+            hasPicture={Boolean(profile?.avatar)}
             initial={{
               name: profile?.name ?? user.name ?? "",
               city: profile?.workerProfile?.city ?? "",

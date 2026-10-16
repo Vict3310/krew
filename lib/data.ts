@@ -300,7 +300,51 @@ export async function getPlatformStats() {
 export async function getUserProfile(userId: string) {
   return prisma.user.findUnique({
     where: { id: userId },
-    include: { workerProfile: true, organizerProfile: true },
+    include: {
+      workerProfile: true,
+      organizerProfile: true,
+      // Only the metadata: the picture's bytes are served from /api/avatars.
+      avatar: { select: { updatedAt: true, byteSize: true } },
+    },
+  });
+}
+
+/** Reviews a worker has received, newest first, with who wrote each one. */
+export async function getWorkerReviews(workerId: string) {
+  return prisma.review.findMany({
+    where: { recipientId: workerId },
+    include: {
+      author: { select: { id: true, name: true, username: true, role: true } },
+      assignment: { select: { shift: { select: { id: true, title: true, shiftDate: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+}
+
+/**
+ * The assignment that makes a worker reviewable by this organizer, if it exists.
+ * Returns null when the two have no working relationship on that shift, and the
+ * nested `review` tells the caller whether one has already been left.
+ */
+export async function getReviewContext(input: {
+  organizerId: string;
+  workerId: string;
+  shiftId: string;
+  isAdmin?: boolean;
+}) {
+  return prisma.shiftAssignment.findFirst({
+    where: {
+      userId: input.workerId,
+      shiftId: input.shiftId,
+      ...(input.isAdmin ? {} : { shift: { organizerId: input.organizerId } }),
+    },
+    select: {
+      id: true,
+      status: true,
+      shift: { select: { id: true, title: true, status: true, shiftDate: true } },
+      review: { select: { id: true, rating: true, comment: true, createdAt: true } },
+    },
   });
 }
 

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
 
+import AvatarUpload from "@/components/avatar-upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,9 +19,13 @@ const SKILL_SUGGESTIONS = ["Guest check-in", "Crowd management", "Ushering", "Se
 
 export default function OnboardingForm({
   role,
+  userId,
+  hasPicture,
   initial,
 }: {
   role: Role;
+  userId: string;
+  hasPicture: boolean;
   initial: {
     name: string;
     city: string;
@@ -176,6 +181,11 @@ export default function OnboardingForm({
         {step === 0 && !isOrganizer ? (
           <>
             <div className="space-y-2">
+              <Label>Profile picture</Label>
+              <p className="text-xs text-[#8A90A6]">Organizers see this next to your applications and reviews.</p>
+              <AvatarUpload userId={userId} name={form.name} hasPicture={hasPicture} />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="name">Your full name</Label>
               <Input id="name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ada Okafor" autoComplete="name" />
               <p className="text-xs text-[#8A90A6]">Organizers see this when they review your applications.</p>
@@ -184,11 +194,28 @@ export default function OnboardingForm({
               <Label htmlFor="city">City you work in</Label>
               <Input id="city" value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="Lagos" />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="bio">Short bio</Label>
+              <textarea
+                id="bio"
+                rows={3}
+                value={form.bio}
+                onChange={(e) => set("bio", e.target.value)}
+                placeholder="A sentence about the kind of work you do best."
+                className="w-full rounded-xl border border-[#E6E7EF] bg-white px-3 py-2 text-sm text-[#0B1020] outline-none focus:border-[#4A2FD6]"
+              />
+              <p className="text-xs text-[#8A90A6]">Optional, but it is what organizers read first.</p>
+            </div>
           </>
         ) : null}
 
         {step === 0 && isOrganizer ? (
           <>
+            <div className="space-y-2">
+              <Label>Profile picture</Label>
+              <p className="text-xs text-[#8A90A6]">Workers see this on the staffing requests you publish.</p>
+              <AvatarUpload userId={userId} name={form.name} hasPicture={hasPicture} />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="name">Your full name</Label>
               <Input id="name" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Bola Adeyemi" autoComplete="name" />
@@ -277,6 +304,7 @@ export default function OnboardingForm({
                     ["City", form.city],
                     ["Availability", form.availability || "—"],
                     ["Experience", form.skills.length ? form.skills.join(", ") : "—"],
+                    ["Bio", form.bio || "—"],
                   ]
               ).map(([label, value]) => (
                 <div key={label} className="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:justify-between sm:gap-6">
@@ -285,17 +313,6 @@ export default function OnboardingForm({
                 </div>
               ))}
             </dl>
-            <div className="space-y-2">
-              <Label htmlFor="bio">{isOrganizer ? "Anything else workers should know? (optional)" : "Short profile summary (optional)"}</Label>
-              <textarea
-                id="bio"
-                rows={3}
-                value={isOrganizer ? form.description : form.bio}
-                onChange={(e) => set(isOrganizer ? "description" : "bio", e.target.value)}
-                className="w-full rounded-xl border border-[#E6E7EF] bg-white px-3 py-2 text-sm text-[#0B1020] outline-none focus:border-[#4A2FD6]"
-                placeholder={isOrganizer ? "Shift patterns, dress code, payment timelines…" : "A sentence about the kind of work you do best."}
-              />
-            </div>
           </div>
         ) : null}
 

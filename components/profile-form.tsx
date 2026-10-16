@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import AvatarUpload from "@/components/avatar-upload";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,17 @@ export type ProfileFields = {
 
 const SKILL_SUGGESTIONS = ["Guest check-in", "Crowd management", "Ushering", "Setup & teardown", "VIP support", "Registration desk"];
 
-export default function ProfileForm({ role, initial }: { role: string; initial: ProfileFields }) {
+export default function ProfileForm({
+  role,
+  userId,
+  hasPicture,
+  initial,
+}: {
+  role: string;
+  userId: string;
+  hasPicture: boolean;
+  initial: ProfileFields;
+}) {
   const { push } = useToast();
   const isOrganizer = role === "ORGANIZER";
   const [form, setForm] = useState(initial);
@@ -68,6 +79,11 @@ export default function ProfileForm({ role, initial }: { role: string; initial: 
       <CardContent>
         <form className="space-y-5" onSubmit={submit}>
           {error ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+
+          <div className="space-y-2">
+            <Label>Profile picture</Label>
+            <AvatarUpload userId={userId} name={form.name} hasPicture={hasPicture} />
+          </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
