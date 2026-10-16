@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarClock, ClipboardList, UserCheck, Users } from "lucide-react";
+import { CalendarClock, ClipboardList, ShieldCheck, UserCheck, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/auth";
 import { getOrganizerDashboard, isProfileComplete } from "@/lib/data";
+import { escrowStatusLabel, escrowStatusTone } from "@/lib/escrow";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,16 @@ export default async function OrganizerPage() {
     .filter((shift) => shift.status === "PUBLISHED" || shift.status === "COMPLETED")
     .reduce((sum, shift) => sum + shift.compensation * shift._count.assignments, 0);
 
+  const fundedShifts = shifts.filter((shift) => shift.fundingStatus === "FUNDED");
+  const escrowedTotal = fundedShifts.reduce((sum, shift) => sum + shift.escrowAmount, 0);
+  const releasedCount = shifts.filter((shift) => shift.fundingStatus === "RELEASED").length;
+
   const summary = [
     { icon: ClipboardList, label: "Published shifts", value: String(shifts.filter((s) => s.status === "PUBLISHED").length), hint: `${shifts.length} total created` },
     { icon: UserCheck, label: "Applicants to review", value: String(pendingApplications), hint: pendingApplications ? "Waiting on your decision" : "You are all caught up" },
     { icon: Users, label: "Confirmed crew", value: String(confirmedAssignments), hint: `${openPositions} positions still open` },
     { icon: CalendarClock, label: "Committed pay", value: formatCurrency(totalCommitted), hint: "Pay × confirmed crew" },
+    { icon: ShieldCheck, label: "Held in escrow", value: formatCurrency(escrowedTotal), hint: `${fundedShifts.length} funded · ${releasedCount} released` },
   ];
 
   return (
@@ -55,7 +61,7 @@ export default async function OrganizerPage() {
         </div>
       </div>
 
-      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
         {summary.map((item) => (
           <Card key={item.label}>
             <CardHeader>
@@ -90,9 +96,10 @@ export default async function OrganizerPage() {
                     <p className="text-lg font-semibold text-[#0B1020]">{shift.title}</p>
                     <p className="text-sm text-[#5B6178]">{shift.venue}, {shift.location} · {formatDate(shift.shiftDate)}</p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge variant="secondary">{shift._count.applications} applied</Badge>
                     <Badge>{shift._count.assignments}/{shift.requiredStaff} confirmed</Badge>
+                    <Badge variant={escrowStatusTone(shift.fundingStatus)}>{escrowStatusLabel(shift.fundingStatus)}</Badge>
                   </div>
                 </div>
                 <div className="mt-3 flex justify-end">

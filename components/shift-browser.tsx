@@ -23,6 +23,7 @@ export type ShiftListItem = {
   applicationDeadline: string;
   applicationsCount: number;
   organizerName: string;
+  openings: { role: string; headcount: number }[];
 };
 
 export default function ShiftBrowser({
@@ -44,7 +45,16 @@ export default function ShiftBrowser({
     return shifts.filter((shift) => {
       const matchesLocation = location === "All" || shift.location === location;
       const matchesCategory = category === "All" || shift.category === category;
-      const haystack = [shift.title, shift.venue, shift.location, shift.category, shift.organizerName].join(" ").toLowerCase();
+      const haystack = [
+        shift.title,
+        shift.venue,
+        shift.location,
+        shift.category,
+        shift.organizerName,
+        ...shift.openings.map((opening) => opening.role),
+      ]
+        .join(" ")
+        .toLowerCase();
       const matchesSearch = !term || haystack.includes(term);
       return matchesLocation && matchesCategory && matchesSearch;
     });
@@ -144,6 +154,15 @@ export default function ShiftBrowser({
                   <h2 className="mt-4 text-2xl font-semibold text-[#0B1020]">{shift.title}</h2>
                   <p className="mt-2 text-sm text-[#5B6178]">{shift.venue}</p>
                   <p className="mt-1 text-xs text-[#8A90A6]">Posted by {shift.organizerName}</p>
+                  {shift.openings.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {shift.openings.map((opening) => (
+                        <span key={`${shift.id}-${opening.role}`} className="rounded-full bg-white/70 px-2.5 py-1 text-xs text-[#3B2BA8]">
+                          {opening.role} × {opening.headcount}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
                 <CardContent className="flex flex-1 flex-col gap-4 pt-5">
                   <div className="flex items-center gap-2 text-sm text-[#5B6178]">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import RoleSwitcher from "@/components/settings/role-switcher";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
@@ -13,7 +14,7 @@ const links = [
 ];
 
 export default async function SettingsPage() {
-  await requireUser();
+  const user = await requireUser();
 
   return (
     <>
@@ -22,6 +23,8 @@ export default async function SettingsPage() {
           <p className="text-xs uppercase tracking-[0.25em] text-[#5B6178]">Settings</p>
           <h1 className="mt-2 text-3xl font-semibold text-[#0B1020]">Account controls</h1>
         </div>
+
+        <RoleSwitcher currentRole={user.role} />
 
         <div className="grid gap-5 md:grid-cols-3">
           {links.map((item) => (

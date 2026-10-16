@@ -72,6 +72,13 @@ enum TransactionStatus {
   REFUNDED
 }
 
+enum FundingStatus {
+  UNFUNDED
+  FUNDED
+  RELEASED
+  REFUNDED
+}
+
 enum ReportStatus {
   OPEN
   REVIEWING
@@ -247,11 +254,22 @@ model Shift {
   startTime         String
   endTime           String
   compensation      Int
+  // Headcount is the sum of the shift's openings, so it is kept in step by the
+  // server whenever the role breakdown changes. It stays a stored column so
+  // capacity checks and marketplace filters keep working unchanged.
   requiredStaff     Int
   applicationDeadline DateTime
   status            ShiftStatus       @default(DRAFT)
+  // Escrow. An organizer funds the whole crew cost up front; the held amount is
+  // released to confirmed crew once the event is done. Simulated, but the state
+  // machine is real: money cannot be released before it was deposited.
+  fundingStatus     FundingStatus     @default(UNFUNDED)
+  escrowAmount      Int               @default(0)
+  fundedAt          DateTime?
+  releasedAt        DateTime?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+  openings          ShiftOpening[]
   applications      ShiftApplication[]
   assignments       ShiftAssignment[]
   attendance        AttendanceRecord[]
@@ -262,12 +280,33 @@ model Shift {
   @@index([organizerId])
 }
 
+/// A worker type the organizer is hiring for, with how many they need.
+///
+/// One staffing request can mix roles (Security x4, Ushers x6) and each role is
+/// its own opening, so capacity is tracked per role rather than as one number.
+model ShiftOpening {
+  id           String            @id @default(uuid()) @db.Uuid
+  shiftId      String            @db.Uuid
+  role         String
+  headcount    Int
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  shift        Shift             @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  applications ShiftApplication[]
+  assignments  ShiftAssignment[]
+
+  @@index([shiftId])
+}
+
 model ShiftApplication {
   id        String            @id @default(uuid()) @db.Uuid
   userId    String            @db.Uuid
   shiftId   String            @db.Uuid
+  /// The specific role the worker asked for. Null means "any role on the shift".
+  openingId String?           @db.Uuid
   user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   shift     Shift             @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  opening   ShiftOpening?     @relation(fields: [openingId], references: [id], onDelete: SetNull)
   status    ApplicationStatus @default(PENDING)
   coverNote String?
   createdAt DateTime          @default(now())
@@ -276,6 +315,7 @@ model ShiftApplication {
   @@unique([userId, shiftId])
   @@index([shiftId, status])
   @@index([userId])
+  @@index([openingId])
 }
 
 model ShiftAssignment {
@@ -283,18 +323,22 @@ model ShiftAssignment {
   shiftId       String           @db.Uuid
   userId        String           @db.Uuid
   assignedById  String?          @db.Uuid
+  /// The role this worker was confirmed onto, used for per-role capacity.
+  openingId     String?          @db.Uuid
   status        AssignmentStatus @default(ASSIGNED)
   assignedAt    DateTime         @default(now())
   completedAt   DateTime?
   shift         Shift            @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   assignedBy    User?            @relation("AssignmentAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  opening       ShiftOpening?    @relation(fields: [openingId], references: [id], onDelete: SetNull)
   attendance    AttendanceRecord[]
   review        Review?          
 
   @@unique([shiftId, userId])
   @@index([shiftId])
   @@index([userId])
+  @@index([openingId])
 }
 
 model AttendanceRecord {

@@ -45,6 +45,8 @@ export default async function OrganizerShiftsPage() {
             requiredStaff: shift.requiredStaff,
             applicationsCount: shift._count.applications,
             assignmentsCount: shift._count.assignments,
+            fundingStatus: shift.fundingStatus,
+            openings: shift.openings.map((opening) => ({ role: opening.role, headcount: opening.headcount })),
           }))}
         />
       )}

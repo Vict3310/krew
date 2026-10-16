@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
-import { getShiftApplication, getShiftById } from "@/lib/data";
+import { getActiveAssignmentCountsByOpening, getShiftApplication, getShiftById } from "@/lib/data";
 import { currentTimeMs, formatCurrency, formatDate } from "@/lib/utils";
 import { applicationStatusLabel } from "@/lib/status";
 
@@ -28,11 +28,26 @@ export default async function ShiftDetailPage({ params }: { params: Promise<{ id
     );
   }
 
-  const application = user ? await getShiftApplication(user.id, shift.id) : null;
+  const [application, filledByOpening] = await Promise.all([
+    user ? getShiftApplication(user.id, shift.id) : Promise.resolve(null),
+    getActiveAssignmentCountsByOpening(shift.id),
+  ]);
   const isOpen = shift.status === "PUBLISHED" && shift.applicationDeadline.getTime() >= currentTimeMs();
   const organizerName = shift.organizer?.name ?? shift.organizer?.username ?? "Event organizer";
-  const filled = shift._count.assignments;
+  const filled = Object.values(filledByOpening).reduce((sum, count) => sum + count, 0);
   const remaining = Math.max(0, shift.requiredStaff - filled);
+
+  // Shifts created before worker types have no openings; they read as one role
+  // built from the shift's own category and headcount.
+  const openings =
+    shift.openings.length > 0
+      ? shift.openings.map((opening) => ({
+          id: opening.id,
+          role: opening.role,
+          headcount: opening.headcount,
+          remaining: Math.max(0, opening.headcount - (filledByOpening[opening.id] ?? 0)),
+        }))
+      : [{ id: null, role: shift.category, headcount: shift.requiredStaff, remaining }];
 
   return (
     <main className="mx-auto max-w-6xl space-y-8 px-4 py-8 md:px-8">
@@ -55,6 +70,7 @@ export default async function ShiftDetailPage({ params }: { params: Promise<{ id
             isAuthenticated={Boolean(user)}
             isWorker={user?.role === "WORKER"}
             isOpen={isOpen}
+            openings={openings}
           />
         </div>
       </div>
@@ -66,6 +82,23 @@ export default async function ShiftDetailPage({ params }: { params: Promise<{ id
           </CardHeader>
           <CardContent className="space-y-5 text-sm text-[#5B6178]">
             <p className="whitespace-pre-line">{shift.description}</p>
+
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-[#8A90A6]">Crew wanted</p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {openings.map((opening) => (
+                  <div key={opening.id ?? opening.role} className="flex items-center justify-between rounded-2xl border border-[#E9EAF2] bg-[#FAFAFD] p-4">
+                    <span className="flex items-center gap-2 font-medium text-[#0B1020]">
+                      <Users className="h-4 w-4 text-[#5B3DF5]" aria-hidden="true" /> {opening.role}
+                    </span>
+                    <span className="text-xs text-[#5B6178]">
+                      {opening.remaining > 0 ? `${opening.remaining} of ${opening.headcount} left` : "Filled"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl bg-[#F0EEFF] p-4">
                 <p className="text-xs uppercase tracking-[0.2em] text-[#8A90A6]">Location</p>

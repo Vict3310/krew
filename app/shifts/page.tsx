@@ -34,6 +34,7 @@ export default async function ShiftsPage() {
       applicationDeadline: shift.applicationDeadline.toISOString(),
       applicationsCount: shift._count.applications,
       organizerName: shift.organizer?.name ?? shift.organizer?.username ?? "Event organizer",
+      openings: shift.openings.map((opening) => ({ role: opening.role, headcount: opening.headcount })),
     }));
   } catch (error) {
     if (!isDatabaseUnavailableError(error)) throw error;

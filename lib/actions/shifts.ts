@@ -5,23 +5,34 @@ import { ApplicationStatus, AssignmentStatus, Role, ShiftStatus } from "@prisma/
 import { z } from "zod";
 
 import { getCurrentUser } from "@/lib/auth";
-import { countActiveAssignments } from "@/lib/data";
+import { getActiveAssignmentCountsByOpening } from "@/lib/data";
 import { prisma } from "@/lib/db";
 import { toCoordinates } from "@/lib/geo/coordinates";
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a valid date.");
 
+/** One worker type on a staffing request: what they do and how many are needed. */
+const openingSchema = z.object({
+  role: z.string().trim().min(2, "Name each worker type, for example Security.").max(60),
+  headcount: z.coerce.number().int().min(1, "Each worker type needs at least 1 person.").max(500),
+});
+
 const shiftInputSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().trim().min(3, "Shift title must be at least 3 characters.").max(120),
-  category: z.string().trim().min(2, "Choose a category for this role.").max(60),
+  // The shift's category and headcount are derived from its openings: the first
+  // role becomes the marketplace category and the headcount is the sum, so the
+  // two can never drift apart.
+  openings: z
+    .array(openingSchema)
+    .min(1, "Add at least one worker type.")
+    .max(12, "Keep it to 12 worker types or fewer."),
   description: z.string().trim().min(20, "Describe the role with at least 20 characters.").max(2000),
   venue: z.string().trim().min(3, "Venue is required.").max(160),
   location: z.string().trim().min(2, "Location is required.").max(80),
   date: dateString,
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use a HH:MM start time."),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, "Use a HH:MM end time."),
-  requiredStaff: z.coerce.number().int().min(1, "At least 1 crew member is required.").max(500),
   compensation: z.coerce.number().int().min(1000, "Pay must be at least ₦1,000.").max(100_000_000),
   deadline: dateString,
   publish: z.boolean().optional().default(true),
@@ -37,6 +48,27 @@ const shiftInputSchema = z.object({
 });
 
 export type ShiftActionState = { ok: boolean; error?: string; shiftId?: string };
+
+/**
+ * Collapse the submitted rows into the roles actually stored on the shift.
+ * Two rows for the same worker type are merged rather than shown twice, and the
+ * order the organizer typed is preserved for the first appearance of each role.
+ */
+function normalizeOpenings(openings: { role: string; headcount: number }[]) {
+  const merged = new Map<string, { role: string; headcount: number }>();
+
+  for (const opening of openings) {
+    const key = opening.role.trim().toLowerCase();
+    const existing = merged.get(key);
+    if (existing) {
+      existing.headcount += opening.headcount;
+    } else {
+      merged.set(key, { role: opening.role.trim(), headcount: opening.headcount });
+    }
+  }
+
+  return [...merged.values()];
+}
 
 export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionState> {
   const user = await getCurrentUser();
@@ -60,6 +92,13 @@ export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionStat
     return { ok: false, error: "The application deadline must be on or before the shift date." };
   }
 
+  const openings = normalizeOpenings(data.openings);
+  const requiredStaff = openings.reduce((sum, opening) => sum + opening.headcount, 0);
+
+  if (requiredStaff > 500) {
+    return { ok: false, error: "A shift can request at most 500 crew in total." };
+  }
+
   /*
    * A single coordinate is meaningless, so a position is only stored when both
    * values are valid. A pin with no declared precision is stored as
@@ -74,7 +113,7 @@ export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionStat
 
   const payload = {
     title: data.title,
-    category: data.category,
+    category: openings[0]!.role,
     description: data.description,
     venue: data.venue,
     location: data.location,
@@ -89,7 +128,7 @@ export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionStat
     startTime: data.startTime,
     endTime: data.endTime,
     compensation: data.compensation,
-    requiredStaff: data.requiredStaff,
+    requiredStaff,
     applicationDeadline,
     status: data.publish ? ShiftStatus.PUBLISHED : ShiftStatus.DRAFT,
   };
@@ -106,7 +145,20 @@ export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionStat
         return { ok: false, error: "That shift does not exist on your account." };
       }
 
-      await prisma.shift.update({ where: { id: existing.id }, data: payload });
+      /*
+       * Openings are replaced wholesale rather than diffed: the form submits the
+       * full role list every time, and an edit that removes a role should remove
+       * the matching row too. Assignments and applications that referenced a
+       * removed opening fall back to "any role" (openingId set null) instead of
+       * being deleted, so no confirmed crew member loses their shift.
+       */
+      await prisma.$transaction([
+        prisma.shift.update({ where: { id: existing.id }, data: payload }),
+        prisma.shiftOpening.deleteMany({ where: { shiftId: existing.id } }),
+        prisma.shiftOpening.createMany({
+          data: openings.map((opening) => ({ shiftId: existing.id, role: opening.role, headcount: opening.headcount })),
+        }),
+      ]);
       revalidatePath("/organizer/shifts");
       revalidatePath(`/organizer/shifts/${existing.id}/review`);
       revalidatePath("/shifts");
@@ -114,7 +166,11 @@ export async function createOrUpdateShift(raw: unknown): Promise<ShiftActionStat
     }
 
     const shift = await prisma.shift.create({
-      data: { ...payload, organizerId: user.id },
+      data: {
+        ...payload,
+        organizerId: user.id,
+        openings: { create: openings.map((opening) => ({ role: opening.role, headcount: opening.headcount })) },
+      },
     });
 
     revalidatePath("/organizer");
@@ -157,7 +213,17 @@ export async function decideApplication({
 
   const application = await prisma.shiftApplication.findUnique({
     where: { id: applicationId },
-    include: { shift: { select: { id: true, organizerId: true, requiredStaff: true, title: true } } },
+    include: {
+      shift: {
+        select: {
+          id: true,
+          organizerId: true,
+          requiredStaff: true,
+          title: true,
+          openings: { orderBy: { createdAt: "asc" }, select: { id: true, role: true, headcount: true } },
+        },
+      },
+    },
   });
 
   if (!application) return { ok: false, error: "That application no longer exists." };
@@ -170,10 +236,29 @@ export async function decideApplication({
 
   try {
     if (decision === "ACCEPTED") {
-      // Capacity is enforced here, not in the UI: a shift can never be over-filled.
-      const filled = await countActiveAssignments(shiftId);
+      // Capacity is enforced here, not in the UI: a shift can never be over-filled,
+      // and neither can an individual worker type.
+      const filledByOpening = await getActiveAssignmentCountsByOpening(shiftId);
+      const filled = Object.values(filledByOpening).reduce((sum, count) => sum + count, 0);
+
       if (filled >= application.shift.requiredStaff) {
         return { ok: false, error: `All ${application.shift.requiredStaff} positions for "${application.shift.title}" are already filled.` };
+      }
+
+      const { openings } = application.shift;
+
+      // Confirm onto the role the worker asked for, otherwise the first role that
+      // still has room. With no openings on the shift this stays null and only the
+      // overall headcount applies.
+      const openingId = openings.some((opening) => opening.id === application.openingId)
+        ? application.openingId
+        : (openings.find((opening) => (filledByOpening[opening.id] ?? 0) < opening.headcount)?.id ?? null);
+
+      if (openingId) {
+        const opening = openings.find((candidate) => candidate.id === openingId)!;
+        if ((filledByOpening[opening.id] ?? 0) >= opening.headcount) {
+          return { ok: false, error: `All ${opening.headcount} ${opening.role} positions are already filled.` };
+        }
       }
 
       await prisma.$transaction([
@@ -183,11 +268,12 @@ export async function decideApplication({
         }),
         prisma.shiftAssignment.upsert({
           where: { shiftId_userId: { shiftId, userId: application.userId } },
-          update: { status: AssignmentStatus.ASSIGNED, assignedById: user.id },
+          update: { status: AssignmentStatus.ASSIGNED, assignedById: user.id, openingId },
           create: {
             shiftId,
             userId: application.userId,
             assignedById: user.id,
+            openingId,
             status: AssignmentStatus.ASSIGNED,
           },
         }),

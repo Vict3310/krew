@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import ShiftForm from "@/components/organizer/shift-form";
+import ShiftForm, { type ShiftFormValues } from "@/components/organizer/shift-form";
 import type { VenueLocationValue } from "@/components/venue/venue-picker";
 import { requireRole } from "@/lib/auth";
 import { getOrganizerShift } from "@/lib/data";
@@ -19,15 +19,14 @@ export default async function NewShiftPage({
   const user = await requireRole(["ORGANIZER", "ADMIN"]);
   const { edit } = await searchParams;
 
-  let initial = {
+  let initial: ShiftFormValues = {
     title: "",
-    category: "",
+    openings: [{ role: "", headcount: 1 }],
     location: "",
     venue: "",
     date: isoDate(14),
     startTime: "09:00",
     endTime: "17:00",
-    requiredStaff: 8,
     compensation: 40000,
     deadline: isoDate(10),
     description: "",
@@ -39,15 +38,24 @@ export default async function NewShiftPage({
     const shift = await getOrganizerShift(edit, user.id);
     if (!shift) notFound();
 
+    /*
+     * Shifts created before worker types existed have no openings. They are shown
+     * as a single role built from the shift's own category and headcount, so the
+     * organizer edits them in the same interface and saves them as real roles.
+     */
+    const openings =
+      shift.openings.length > 0
+        ? shift.openings.map((opening) => ({ role: opening.role, headcount: opening.headcount }))
+        : [{ role: shift.category, headcount: shift.requiredStaff }];
+
     initial = {
       title: shift.title,
-      category: shift.category,
+      openings,
       location: shift.location,
       venue: shift.venue,
       date: shift.shiftDate.toISOString().slice(0, 10),
       startTime: shift.startTime,
       endTime: shift.endTime,
-      requiredStaff: shift.requiredStaff,
       compensation: shift.compensation,
       deadline: shift.applicationDeadline.toISOString().slice(0, 10),
       description: shift.description,

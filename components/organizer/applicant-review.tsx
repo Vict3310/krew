@@ -12,6 +12,13 @@ import { decideApplication } from "@/lib/actions/shifts";
 import { formatDate } from "@/lib/utils";
 import { applicationStatusLabel, applicationStatusTone } from "@/lib/status";
 
+export type ReviewOpening = {
+  id: string;
+  role: string;
+  headcount: number;
+  confirmed: number;
+};
+
 export type ApplicantRow = {
   id: string;
   status: string;
@@ -25,6 +32,8 @@ export type ApplicantRow = {
   availability: string | null;
   skills: string[];
   bio: string | null;
+  requestedRole: string | null;
+  openingId: string | null;
 };
 
 export default function ApplicantReview({
@@ -32,12 +41,14 @@ export default function ApplicantReview({
   shiftTitle,
   requiredStaff,
   confirmed,
+  openings,
   applications,
 }: {
   shiftId: string;
   shiftTitle: string;
   requiredStaff: number;
   confirmed: number;
+  openings: ReviewOpening[];
   applications: ApplicantRow[];
 }) {
   const { push } = useToast();
@@ -47,13 +58,30 @@ export default function ApplicantReview({
     Object.fromEntries(applications.map((application) => [application.id, application.status])),
   );
   const [filled, setFilled] = useState(confirmed);
+  // Confirmed crew per role, mirrored locally so the per-role "full" state
+  // updates the moment an applicant is accepted.
+  const [roleCounts, setRoleCounts] = useState<Record<string, number>>(
+    Object.fromEntries(openings.map((opening) => [opening.id, opening.confirmed])),
+  );
 
-  const accepted = Object.values(statuses).filter((status) => status === "ACCEPTED").length;
   const positionsLeft = Math.max(0, requiredStaff - filled);
+
+  /**
+   * The role an acceptance will fill: the role the worker asked for when it has
+   * room, otherwise the first role that still needs people. Mirrors the server.
+   */
+  function targetOpening(application: ApplicantRow): ReviewOpening | undefined {
+    if (application.openingId) {
+      const requested = openings.find((opening) => opening.id === application.openingId);
+      if (requested && (roleCounts[requested.id] ?? 0) < requested.headcount) return requested;
+    }
+    return openings.find((opening) => (roleCounts[opening.id] ?? 0) < opening.headcount);
+  }
 
   function decide(application: ApplicantRow, decision: "ACCEPTED" | "REJECTED") {
     setBusyId(application.id);
     startTransition(async () => {
+      const target = decision === "ACCEPTED" ? targetOpening(application) : undefined;
       const result = await decideApplication({ applicationId: application.id, decision });
       setBusyId(null);
 
@@ -63,12 +91,18 @@ export default function ApplicantReview({
       }
 
       setStatuses((current) => ({ ...current, [application.id]: decision }));
-      if (decision === "ACCEPTED") setFilled((current) => current + 1);
+      if (decision === "ACCEPTED") {
+        setFilled((current) => current + 1);
+        if (target) {
+          setRoleCounts((current) => ({ ...current, [target.id]: (current[target.id] ?? 0) + 1 }));
+        }
+      }
+
       push({
         title: decision === "ACCEPTED" ? "Applicant confirmed" : "Applicant rejected",
         description:
           decision === "ACCEPTED"
-            ? `${application.name} now appears in your confirmed crew.`
+            ? `${application.name} now appears in your confirmed crew${target ? ` as ${target.role}` : ""}.`
             : `${application.name} has been notified via their applications list.`,
         variant: decision === "ACCEPTED" ? "success" : "info",
       });
@@ -101,7 +135,8 @@ export default function ApplicantReview({
             const isAccepted = status === "ACCEPTED";
             const isRejected = status === "REJECTED";
             const busy = busyId === application.id && pending;
-            const canAccept = !isAccepted && positionsLeft > 0;
+            const target = targetOpening(application);
+            const canAccept = !isAccepted && positionsLeft > 0 && Boolean(target);
 
             return (
               <div key={application.id} className="rounded-2xl border border-[#E9EAF2] bg-[#FBFBFE] p-4">
@@ -116,6 +151,14 @@ export default function ApplicantReview({
                       {application.availability ? <span>Available: {application.availability}</span> : null}
                       <span>Applied {formatDate(application.createdAt)}</span>
                     </div>
+                    {application.requestedRole ? (
+                      <p className="mt-2 text-xs text-[#5B6178]">
+                        Wants: <span className="font-medium text-[#3B2BA8]">{application.requestedRole}</span>
+                        {!isAccepted && target && target.role !== application.requestedRole ? (
+                          <span> · confirming would fill {target.role} instead</span>
+                        ) : null}
+                      </p>
+                    ) : null}
                   </div>
                   <Badge variant={applicationStatusTone(status)}>{applicationStatusLabel(status)}</Badge>
                 </div>
@@ -150,9 +193,16 @@ export default function ApplicantReview({
                     size="sm"
                     onClick={() => decide(application, "ACCEPTED")}
                     disabled={busy || isAccepted || !canAccept}
-                    title={positionsLeft === 0 && !isAccepted ? "All positions are filled" : undefined}
+                    title={
+                      !canAccept && !isAccepted
+                        ? positionsLeft === 0
+                          ? "All positions are filled"
+                          : "This role is already full"
+                        : undefined
+                    }
                   >
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Accept
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    Accept{target && !isAccepted ? ` as ${target.role}` : ""}
                   </Button>
                   <Button
                     variant="ghost"
@@ -163,7 +213,11 @@ export default function ApplicantReview({
                     <X className="h-4 w-4" /> Reject
                   </Button>
                   {!canAccept && !isAccepted ? (
-                    <span className="text-xs text-[#8A6116]">All {requiredStaff} positions are filled.</span>
+                    <span className="text-xs text-[#8A6116]">
+                      {positionsLeft === 0
+                        ? `All ${requiredStaff} positions are filled.`
+                        : "Every role on this shift is full."}
+                    </span>
                   ) : null}
                 </div>
               </div>
@@ -171,9 +225,9 @@ export default function ApplicantReview({
           })
         )}
 
-        {accepted > 0 ? (
+        {applications.length > 0 ? (
           <p className="text-xs text-[#8A90A6]">
-            Confirming an applicant also creates their assignment and updates their dashboard immediately.
+            Confirming an applicant fills the role they asked for when it still has room, and creates their assignment immediately.
           </p>
         ) : null}
       </CardContent>

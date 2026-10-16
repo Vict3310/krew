@@ -127,6 +127,12 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
   const pathname = usePathname();
   const collapsed = useSyncExternalStore(subscribeRail, readRailCollapsed, getServerRailSnapshot);
   const isHome = pathname === "/";
+  /*
+   * Sign in, sign up and the password-reset screens are standalone: they are
+   * reached before an account exists, so they get the public header even when a
+   * signed-in user lands on them. The rail would otherwise wrap the form.
+   */
+  const isAuthRoute = pathname.startsWith("/auth");
   const navItems = navItemsForRole(user?.role);
 
   // The rail's width lives in one CSS variable on <html>, so the rail and the
@@ -138,11 +144,11 @@ export default function AppShell({ user, children }: { user: AppShellUser; child
   /*
    * Public chrome.
    *
-   * The workspace rail is reserved for signed-in users, so visitors — and
-   * anyone on the marketing home page — get the shared branded header instead
-   * of two competing navigations.
+   * The workspace rail is reserved for signed-in users, so visitors — anyone on
+   * the marketing home page, and anyone on an authentication screen — get the
+   * shared branded header instead of two competing navigations.
    */
-  if (isHome || !user) {
+  if (isHome || isAuthRoute || !user) {
     return (
       <>
         <SessionSync />

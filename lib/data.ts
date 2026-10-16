@@ -15,6 +15,9 @@ const organizerSummary = {
   select: { id: true, name: true, username: true },
 } as const;
 
+/** Openings are always read oldest-first so the organizer sees roles as typed. */
+const openingOrder = { orderBy: { createdAt: "asc" } } as const;
+
 export type PublicShift = Awaited<ReturnType<typeof getPublicShifts>>[number];
 
 /** Published, still-open staffing opportunities for the marketplace. */
@@ -42,6 +45,7 @@ export async function getPublicShifts(options?: { search?: string; location?: st
     },
     include: {
       organizer: organizerSummary,
+      openings: openingOrder,
       _count: { select: { applications: true, assignments: true } },
     },
     orderBy: [{ shiftDate: "asc" }, { createdAt: "desc" }],
@@ -77,6 +81,7 @@ export async function getShiftById(id: string) {
     where: { id },
     include: {
       organizer: organizerSummary,
+      openings: openingOrder,
       _count: { select: { applications: true, assignments: true } },
     },
   });
@@ -151,6 +156,7 @@ export async function getOrganizerShifts(organizerId: string) {
   return prisma.shift.findMany({
     where: { organizerId },
     include: {
+      openings: openingOrder,
       _count: { select: { applications: true, assignments: true } },
     },
     orderBy: [{ shiftDate: "asc" }, { createdAt: "desc" }],
@@ -160,7 +166,10 @@ export async function getOrganizerShifts(organizerId: string) {
 export async function getOrganizerShift(shiftId: string, organizerId: string) {
   return prisma.shift.findFirst({
     where: { id: shiftId, organizerId },
-    include: { _count: { select: { applications: true, assignments: true } } },
+    include: {
+      openings: openingOrder,
+      _count: { select: { applications: true, assignments: true } },
+    },
   });
 }
 
@@ -189,6 +198,7 @@ export async function getShiftApplicationsForOrganizer(shiftId: string, organize
     where: { shiftId, shift: { organizerId } },
     include: {
       user: { include: { workerProfile: true } },
+      opening: true,
       shift: { select: { id: true, requiredStaff: true } },
     },
     orderBy: { createdAt: "asc" },
@@ -199,6 +209,25 @@ export async function countActiveAssignments(shiftId: string) {
   return prisma.shiftAssignment.count({
     where: { shiftId, status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED, AssignmentStatus.COMPLETED] } },
   });
+}
+
+/**
+ * Confirmed crew per role, keyed by opening id. Assignments with no opening
+ * (created before roles existed) land under the literal `unassigned` key so the
+ * counts stay honest instead of being folded into an arbitrary role.
+ */
+export async function getActiveAssignmentCountsByOpening(shiftId: string) {
+  const rows = await prisma.shiftAssignment.groupBy({
+    by: ["openingId"],
+    where: { shiftId, status: { in: [AssignmentStatus.ASSIGNED, AssignmentStatus.CONFIRMED, AssignmentStatus.COMPLETED] } },
+    _count: { _all: true },
+  });
+
+  return rows.reduce<Record<string, number>>((counts, row) => {
+    const key = row.openingId ?? "unassigned";
+    counts[key] = (counts[key] ?? 0) + row._count._all;
+    return counts;
+  }, {});
 }
 
 /**

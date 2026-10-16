@@ -11,6 +11,12 @@ Neon PostgreSQL database.
 - Design tokens (colour, type, focus ring, motion) live in `app/globals.css`.
 - Reusable brand components live in `components/brand/`.
 
+## Team
+
+- **Victor** — [@Vict3310](https://github.com/Vict3310)
+- **Qayah Fashinaru**
+- **Ayomide Olapade**
+
 ## Stack
 
 | Layer | Choice |

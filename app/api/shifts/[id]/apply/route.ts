@@ -18,11 +18,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id: shiftId } = await params;
   const json = await request.json().catch(() => ({}));
   const coverNote = typeof json?.coverNote === "string" ? json.coverNote.trim().slice(0, 500) : undefined;
+  // The role the worker picked. Absent on shifts that only have one implied role.
+  const requestedOpeningId = typeof json?.openingId === "string" && json.openingId.trim() ? json.openingId.trim() : null;
 
   try {
     const shift = await prisma.shift.findUnique({
       where: { id: shiftId },
-      select: { id: true, title: true, status: true, applicationDeadline: true, organizerId: true },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        applicationDeadline: true,
+        organizerId: true,
+        openings: { select: { id: true } },
+      },
     });
 
     if (!shift) {
@@ -41,6 +50,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: "You cannot apply to your own shift." }, { status: 400 });
     }
 
+    // A role must belong to this shift: an opening id from another shift is a
+    // malformed request, not a valid choice.
+    if (requestedOpeningId && !shift.openings.some((opening) => opening.id === requestedOpeningId)) {
+      return NextResponse.json({ error: "That role is not part of this shift." }, { status: 400 });
+    }
+
     const existing = await prisma.shiftApplication.findUnique({
       where: { userId_shiftId: { userId: user.id, shiftId } },
     });
@@ -53,7 +68,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const application = await prisma.shiftApplication.create({
-      data: { userId: user.id, shiftId, coverNote: coverNote || null },
+      data: { userId: user.id, shiftId, openingId: requestedOpeningId, coverNote: coverNote || null },
     });
 
     return NextResponse.json({

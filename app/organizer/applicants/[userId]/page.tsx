@@ -6,7 +6,7 @@ import ApplicantReview from "@/components/organizer/applicant-review";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireRole } from "@/lib/auth";
-import { countActiveAssignments } from "@/lib/data";
+import { getActiveAssignmentCountsByOpening } from "@/lib/data";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -32,14 +32,41 @@ export default async function ApplicantDetailPage({
       shift: organizer.role === "ADMIN" ? {} : { organizerId: organizer.id },
     },
     include: {
-      shift: { select: { id: true, title: true, requiredStaff: true } },
+      opening: true,
+      shift: {
+        select: {
+          id: true,
+          title: true,
+          requiredStaff: true,
+          category: true,
+          openings: { orderBy: { createdAt: "asc" }, select: { id: true, role: true, headcount: true } },
+        },
+      },
       user: { include: { workerProfile: true } },
     },
   });
 
   if (!application) notFound();
 
-  const confirmed = await countActiveAssignments(application.shift.id);
+  const filledByOpening = await getActiveAssignmentCountsByOpening(application.shift.id);
+  const confirmed = Object.values(filledByOpening).reduce((sum, count) => sum + count, 0);
+
+  const openings =
+    application.shift.openings.length > 0
+      ? application.shift.openings.map((opening) => ({
+          id: opening.id,
+          role: opening.role,
+          headcount: opening.headcount,
+          confirmed: filledByOpening[opening.id] ?? 0,
+        }))
+      : [
+          {
+            id: "unassigned",
+            role: application.shift.category,
+            headcount: application.shift.requiredStaff,
+            confirmed,
+          },
+        ];
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-8 md:px-8">
@@ -101,6 +128,7 @@ export default async function ApplicantDetailPage({
         shiftTitle={application.shift.title}
         requiredStaff={application.shift.requiredStaff}
         confirmed={confirmed}
+        openings={openings}
         applications={[
           {
             id: application.id,
@@ -115,6 +143,8 @@ export default async function ApplicantDetailPage({
             availability: application.user.workerProfile?.availability ?? null,
             skills: application.user.workerProfile?.skills ?? [],
             bio: application.user.workerProfile?.bio ?? null,
+            requestedRole: application.opening?.role ?? null,
+            openingId: application.openingId,
           },
         ]}
       />

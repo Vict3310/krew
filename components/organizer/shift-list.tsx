@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { deleteShift } from "@/lib/actions/shifts";
+import { escrowStatusLabel, escrowStatusTone } from "@/lib/escrow";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { shiftStatusLabel, shiftStatusTone } from "@/lib/status";
 
@@ -23,6 +24,8 @@ export type OrganizerShiftRow = {
   requiredStaff: number;
   applicationsCount: number;
   assignmentsCount: number;
+  fundingStatus: string;
+  openings: { role: string; headcount: number }[];
 };
 
 export default function ShiftList({ shifts }: { shifts: OrganizerShiftRow[] }) {
@@ -49,9 +52,24 @@ export default function ShiftList({ shifts }: { shifts: OrganizerShiftRow[] }) {
           <CardHeader>
             <div className="flex items-start justify-between gap-3">
               <CardTitle>{shift.title}</CardTitle>
-              <Badge variant={shiftStatusTone(shift.status)}>{shiftStatusLabel(shift.status)}</Badge>
+              <div className="flex flex-col items-end gap-1.5">
+                <Badge variant={shiftStatusTone(shift.status)}>{shiftStatusLabel(shift.status)}</Badge>
+                <Badge variant={escrowStatusTone(shift.fundingStatus)}>{escrowStatusLabel(shift.fundingStatus)}</Badge>
+              </div>
             </div>
             <CardDescription>{shift.venue}, {shift.location} · {formatDate(shift.shiftDate)}</CardDescription>
+            {shift.openings.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {shift.openings.map((opening) => (
+                  <span
+                    key={`${shift.id}-${opening.role}`}
+                    className="rounded-full bg-[#EDEAFF] px-2.5 py-1 text-xs text-[#3B2BA8]"
+                  >
+                    {opening.role} × {opening.headcount}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </CardHeader>
           <CardContent className="flex flex-1 flex-col gap-4">
             <div className="grid grid-cols-3 gap-2 text-center text-sm">
